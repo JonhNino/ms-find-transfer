@@ -2,6 +2,8 @@ package com.banreservas.ms.find.transfer.resource;
 
 import com.banreservas.ms.find.transfer.dto.ErrorResponse;
 import com.banreservas.ms.find.transfer.dto.TransferenciaEstado;
+import com.banreservas.ms.find.transfer.utils.ResponseHtpp;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -20,9 +22,11 @@ public class TransferenciaResource {
 
     @ConfigProperty(name = "quarkus.application.name")
     String microserviceName;
+    @Inject
+    ResponseHtpp responseHtpp;
 
     @GET
-    @Path("/{codigoUnico}")
+    @Path("/{codigoUnico : .*}")
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(
             summary = "Consultar el estado de una transferencia",
@@ -69,55 +73,42 @@ public class TransferenciaResource {
             @Parameter(description = "Código único de la transferencia (número entero de 11 dígitos)", required = true)
             @PathParam("codigoUnico") String codigoUnico) {
 
-
-        if (codigoUnico == null || codigoUnico.isEmpty()) {
-            return crearRespuestaError(Response.Status.BAD_REQUEST, "EMPTY_CODE", "El código único no puede estar vacío.");
+        // Validar si el código único es nulo, vacío o tiene un formato incorrecto
+        if (!isCodigoUnicoValido(codigoUnico)) {
+            return responseHtpp.crearRespuestaError(Response.Status.BAD_REQUEST, "INVALID_CODE", "El código único debe ser un número de 11 dígitos.");
         }
 
-        Long codigoUnicoLong;
-        try {
-            codigoUnicoLong = Long.parseLong(codigoUnico);
-        } catch (NumberFormatException e) {
-            return crearRespuestaError(Response.Status.BAD_REQUEST, "INVALID_CODE_FORMAT", "El código único debe ser un número válido.");
-        }
-
-        // 3. Validar si el código tiene exactamente 11 dígitos
-        if (codigoUnico.length() != 11) {
-            return crearRespuestaError(Response.Status.BAD_REQUEST, "INVALID_CODE_LENGTH", "El código único debe tener exactamente 11 dígitos.");
-        }
-
-        // Continuar con el proceso si todas las validaciones pasan
+        Long codigoUnicoLong = Long.parseLong(codigoUnico);
         try {
             Optional<TransferenciaEstado> transferencia = obtenerTransferenciaPorCodigo(codigoUnicoLong);
 
             if (transferencia.isPresent()) {
                 return Response.ok(transferencia.get()).build();
             } else {
-                return crearRespuestaError(Response.Status.NOT_FOUND, "NOT_FOUND", "Transferencia no encontrada.");
+                return responseHtpp.crearRespuestaError(Response.Status.NOT_FOUND, "NOT_FOUND", "Transferencia no encontrada.");
             }
 
-        } catch (IllegalArgumentException e) {
-            return crearRespuestaError(Response.Status.BAD_REQUEST, "ILLEGAL_ARGUMENT", "Argumento ilegal proporcionado.");
-        } catch (NullPointerException e) {
-            return crearRespuestaError(Response.Status.INTERNAL_SERVER_ERROR, "NULL_POINTER", "Ocurrió un error inesperado al procesar la solicitud.");
         } catch (SecurityException e) {
-            return crearRespuestaError(Response.Status.FORBIDDEN, "FORBIDDEN", "No tiene permisos para acceder a esta información.");
+            return responseHtpp.crearRespuestaError(Response.Status.FORBIDDEN, "FORBIDDEN", "No tiene permisos para acceder a esta información.");
         } catch (ServiceUnavailableException e) {
-            return crearRespuestaError(Response.Status.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", "El servicio está temporalmente fuera de servicio.");
+            return responseHtpp.crearRespuestaError(Response.Status.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", "El servicio está temporalmente fuera de servicio.");
+        } catch (IllegalArgumentException e) {
+            return responseHtpp.crearRespuestaError(Response.Status.BAD_REQUEST, "ILLEGAL_ARGUMENT", "Argumento ilegal proporcionado.");
+        } catch (NullPointerException e) {
+            return responseHtpp.crearRespuestaError(Response.Status.INTERNAL_SERVER_ERROR, "NULL_POINTER", "Ocurrió un error inesperado al procesar la solicitud.");
         } catch (Exception e) {
-            return crearRespuestaError(Response.Status.INTERNAL_SERVER_ERROR, "UNKNOWN_ERROR", "Ocurrió un error inesperado: " + e.getMessage());
+            return responseHtpp.crearRespuestaError(Response.Status.INTERNAL_SERVER_ERROR, "UNKNOWN_ERROR", "Ocurrió un error inesperado: " + e.getMessage());
         }
     }
-
+    private boolean isCodigoUnicoValido(String codigoUnico) {
+        // Verificar si el código es nulo o vacío, y si es un número de exactamente 11 dígitos
+        return codigoUnico != null && codigoUnico.matches("\\d{11}");
+    }
     private Optional<TransferenciaEstado> obtenerTransferenciaPorCodigo(Long codigoUnico) {
         if (codigoUnico.equals(12345678901L)) {
             return Optional.of(new TransferenciaEstado(codigoUnico, "Completada", "Transferencia realizada con éxito"));
         }
         return Optional.empty();
     }
-
-    private Response crearRespuestaError(Response.Status status, String errorCode, String errorMessage) {
-        ErrorResponse errorResponse = new ErrorResponse(microserviceName, status.getStatusCode(), errorCode, errorMessage);
-        return Response.status(status).entity(errorResponse).build();
-    }
+    
 }
