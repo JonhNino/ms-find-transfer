@@ -3,6 +3,8 @@ package com.banreservas.ms.find.transfer.resource;
 import com.banreservas.ms.find.transfer.dto.ErrorResponse;
 import com.banreservas.ms.find.transfer.dto.TransferenciaEstado;
 import com.banreservas.ms.find.transfer.utils.ResponseHtpp;
+import io.quarkus.security.Authenticated;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -18,16 +20,19 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import java.util.Optional;
 
 @Path("/transferencias")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+
 public class TransferenciaResource {
 
     @ConfigProperty(name = "quarkus.application.name")
     String microserviceName;
+
     @Inject
     ResponseHtpp responseHtpp;
 
     @GET
     @Path("/{codigoUnico : .*}")
-    @Produces(MediaType.APPLICATION_JSON)
     @Operation(
             summary = "Consultar el estado de una transferencia",
             description = "Permite consultar el estado de una transferencia mediante un código único de 11 dígitos."
@@ -69,6 +74,8 @@ public class TransferenciaResource {
                     content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorResponse.class))
             )
     })
+    //@Authenticated
+   // @RolesAllowed({"user", "admin"})
     public Response consultarEstadoTransferencia(
             @Parameter(description = "Código único de la transferencia (número entero de 11 dígitos)", required = true)
             @PathParam("codigoUnico") String codigoUnico) {
@@ -88,9 +95,7 @@ public class TransferenciaResource {
                 return responseHtpp.crearRespuestaError(Response.Status.NOT_FOUND, "NOT_FOUND", "Transferencia no encontrada.");
             }
 
-        } catch (SecurityException e) {
-            return responseHtpp.crearRespuestaError(Response.Status.FORBIDDEN, "FORBIDDEN", "No tiene permisos para acceder a esta información.");
-        } catch (ServiceUnavailableException e) {
+       } catch (ServiceUnavailableException e) {
             return responseHtpp.crearRespuestaError(Response.Status.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", "El servicio está temporalmente fuera de servicio.");
         } catch (IllegalArgumentException e) {
             return responseHtpp.crearRespuestaError(Response.Status.BAD_REQUEST, "ILLEGAL_ARGUMENT", "Argumento ilegal proporcionado.");
